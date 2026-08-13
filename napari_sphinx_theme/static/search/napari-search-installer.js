@@ -18,6 +18,11 @@
 // - data-bundle-path: path to THIS site's own pagefind bundle directory (the
 //   folder containing pagefind-component-ui.js). Relative paths resolve against
 //   the page. Required.
+// - data-hook-button: CSS selector matching an EXISTING search button (e.g.
+//   pydata-sphinx-theme's `.search-button__button`) that should open the modal.
+//   Use this on Sphinx/pydata sites so the navbar keeps the theme's own search
+//   button visual — the installer simply hooks its click. Exactly one of
+//   data-hook-button and data-mount should be used.
 // - data-mount: CSS selector matching every element that should host a search
 //   trigger. Defaults to ".napari-search". Some themes render their navbar more
 //   than once per page (desktop + mobile variants), so this script tag may be
@@ -29,8 +34,15 @@
 //
 // The canonical merge list lives in napari-sites.json beside this script and is
 // maintained in ONE place. Sites listed there that haven't built pagefind yet
-// are skipped gracefully (per-index resilience), and light up automatically the
-// moment they opt in — no per-site curation is needed.
+// are skipped gracefully (per-index resilience — each bundle is probed and dead
+// ones are dropped rather than allowed to hang the search), and light up
+// automatically the moment they opt in — no per-site curation is needed.
+//
+// Pagefind itself does NOT handle a missing merged bundle gracefully: its
+// worker fetches each merged bundle's pagefind-entry.json and throws "Failed to
+// load Pagefind metadata" (and the search never resolves) if that returns a
+// non-JSON response, e.g. a 404 HTML page. So we probe every candidate bundle
+// up front and only configure the instance with the ones that respond.
 
 (function () {
   const thisScript = document.currentScript;
@@ -44,6 +56,7 @@
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
+  const hookButton = thisScript.dataset.hookButton || '';
   const mountSelector = thisScript.dataset.mount || '.napari-search';
   // Directory this very script was loaded from — its sibling CSS and the
   // canonical site list live here too.
@@ -91,18 +104,49 @@
       .map((site) => ({ bundlePath: site.bundlePath }));
   }
 
+  // Pagefind cannot survive a merged bundle that 404s (it throws and the search
+  // hangs on "Searching for..."), so drop any candidate whose pagefind-entry.json
+  // is unreachable or not JSON before configuring the instance.
+  async function probeMergeBundles(candidates) {
+    const results = await Promise.all(
+      candidates.map(async (site) => {
+        const entryUrl = new URL(
+          `${site.bundlePath}pagefind-entry.json`,
+          window.location.href,
+        ).href;
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 4000);
+          const response = await fetch(entryUrl, {
+            signal: controller.signal,
+          });
+          clearTimeout(timer);
+          if (!response.ok) return null;
+          const data = JSON.parse(await response.text());
+          return data && typeof data === 'object' ? site : null;
+        } catch {
+          // 404 HTML page, timeout, network error, or non-JSON -> skip it.
+          return null;
+        }
+      }),
+    );
+    return results.filter(Boolean);
+  }
+
   async function mount() {
     loadStylesheet(`${ownDir}napari-search.css`);
 
     // Resolve the merge list BEFORE any component connects, so the unified
-    // instance is configured correctly from the start.
+    // instance is configured correctly from the start. Every candidate bundle is
+    // probed and dead ones dropped — see probeMergeBundles.
     let mergeIndex = [];
+    let candidates = [];
     if (mergePaths.length) {
-      mergeIndex = mergePaths.map((p) => ({ bundlePath: p }));
+      candidates = mergePaths.map((p) => ({ bundlePath: p }));
     } else {
       try {
         const response = await fetch(`${ownDir}napari-sites.json`);
-        mergeIndex = mergeListFromSites(await response.json());
+        candidates = mergeListFromSites(await response.json());
       } catch (error) {
         console.warn(
           'napari-search-installer: could not load the canonical site list; ' +
@@ -110,6 +154,18 @@
           error,
         );
       }
+    }
+    mergeIndex = await probeMergeBundles(candidates);
+    if (mergeIndex.length < candidates.length) {
+      const dropped = candidates.length - mergeIndex.length;
+      console.warn(
+        `napari-search-installer: dropped ${dropped} unreachable sibling ` +
+          'bundle(s); searching this site' +
+          (mergeIndex.length
+            ? ` + ${mergeIndex.length} merged site(s)`
+            : ' only') +
+          '.',
+      );
     }
 
     // Load the Pagefind Component UI from this site's own bundle.
@@ -124,38 +180,63 @@
       excerptLength: 15,
     });
 
-    const mounts = document.querySelectorAll(mountSelector);
-    if (!mounts.length) {
-      console.warn(
-        `napari-search-installer: no element matches ${mountSelector}`,
-      );
-      return;
-    }
-
-    // One trigger per mount (e.g. desktop + mobile navbar variants)…
-    mounts.forEach((mount) => {
-      if (mount.dataset.napariSearchMounted) return;
-      mount.dataset.napariSearchMounted = 'true';
-      const trigger = document.createElement('pagefind-modal-trigger');
-      trigger.setAttribute('shortcut', 'mod+k');
-      if (mount.dataset.placeholder) {
-        trigger.setAttribute('placeholder', mount.dataset.placeholder);
-      }
-      mount.appendChild(trigger);
-    });
-
-    // …but only one modal, appended to the body.
+    // One modal, appended to the body, before we wire up any trigger so that
+    // both trigger paths below can reference it.
     let modal = document.querySelector('pagefind-modal');
     if (!modal) {
       modal = document.createElement('pagefind-modal');
       document.body.appendChild(modal);
     }
 
-    // pydata-sphinx-theme also binds Ctrl/Cmd+K to its (now empty) search
-    // dialog. Remove the dialog and make sure the pagefind modal wins the
-    // shortcut instead. Known minor rough edge: pydata's leftover handler may
-    // log a console error on the first mod+k until its dialog reference is
-    // gone; the modal still opens.
+    if (hookButton) {
+      // Hook an existing themed search button (pydata-sphinx-theme's
+      // `.search-button__button`) so the navbar keeps its own on-brand visual.
+      // Capture-phase + stopImmediatePropagation so pydata's own handler (which
+      // targets the Sphinx dialog we remove below) never runs.
+      const buttons = document.querySelectorAll(hookButton);
+      if (!buttons.length) {
+        console.warn(
+          `napari-search-installer: no element matches ${hookButton}`,
+        );
+      }
+      buttons.forEach((btn) => {
+        if (btn.dataset.napariSearchHooked) return;
+        btn.dataset.napariSearchHooked = 'true';
+        btn.addEventListener(
+          'click',
+          (event) => {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            modal.open();
+          },
+          true,
+        );
+      });
+    } else {
+      // Inject a trigger into every mount (e.g. desktop + mobile navbar
+      // variants, or a custom floating button on non-Sphinx sites).
+      const mounts = document.querySelectorAll(mountSelector);
+      if (!mounts.length) {
+        console.warn(
+          `napari-search-installer: no element matches ${mountSelector}`,
+        );
+      }
+      mounts.forEach((mount) => {
+        if (mount.dataset.napariSearchMounted) return;
+        mount.dataset.napariSearchMounted = 'true';
+        const trigger = document.createElement('pagefind-modal-trigger');
+        trigger.setAttribute('shortcut', 'mod+k');
+        if (mount.dataset.placeholder) {
+          trigger.setAttribute('placeholder', mount.dataset.placeholder);
+        }
+        mount.appendChild(trigger);
+      });
+    }
+
+    // pydata-sphinx-theme also binds Ctrl/Cmd+K and the search button to its
+    // (now removed) search dialog. pydata's handler is null-guarded
+    // (`t && ...`), so once the dialog is gone it becomes a silent no-op and
+    // our capture-phase handler below opens the pagefind modal instead.
     const dialog = document.getElementById('pst-search-dialog');
     if (dialog) dialog.remove();
     window.addEventListener(

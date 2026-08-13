@@ -79,8 +79,19 @@ Domain vocabulary: `CONTEXT.md`.
 - **Canonical merge list**: `static/napari-sites.json` lists sibling napari.org
   sites' pagefind bundles; the installer merges it with per-index resilience
   (dead bundles are dropped, not fatal). Add new sites there, not per-site.
+- **Two trigger modes in the installer**: Sphinx/pydata sites keep pydata's own
+  search button and hook it to open the modal (`data-hook-button`); non-Sphinx
+  sites inject a `pagefind-modal-trigger` into a mount point (`data-mount`).
+  Both modes resolve the merge list *before* configuring the instance, and the
+  per-index resilience is implemented by probing each candidate bundle's
+  `pagefind-entry.json` (pagefind itself throws "Failed to load Pagefind
+  metadata" and hangs if a merged bundle 404s).
 - **Canonical pagefind version**: pinned as a dependency of the theme — bumps are
   org-coordinated and ride theme releases.
+- **Verification**: `scripts/verify_search.py --dir <build>` drives the real
+  modal in a headless browser (system Chrome/Edge) and asserts a set of queries
+  return results — it catches the merge-hang failure class; `--sanity` checks
+  the bundle without a browser.
 
 ## Links
 

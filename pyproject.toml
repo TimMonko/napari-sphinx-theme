@@ -109,6 +109,9 @@ isort.required-imports = ["from __future__ import annotations"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["T20"]
+# scripts/ is for dev tooling (e.g. verify_search.py): print() for CLI output,
+# and the playwright import is deferred so --sanity works without it installed.
+"scripts/**" = ["T20", "PLC0415"]
 
 [tool.mypy]
 python_version = "3.13"
