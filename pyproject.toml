@@ -24,6 +24,12 @@ classifiers = [
   "Operating System :: OS Independent",
 ]
 
+[project.optional-dependencies]
+# Canonical Pagefind version for the unified org-wide search — bumps are
+# org-coordinated and ride theme releases (see docs/adr/0001-theme-owns-unified-search.md).
+# The `[bin]` extra pulls the platform binary so `python -m pagefind` works.
+search = ["pagefind[bin]==1.5.2"]
+
 [dependency-groups]
 docs = [
   "build",
@@ -57,7 +63,9 @@ version_file = "napari_sphinx_theme/_version.py"
 napari_sphinx_theme = [
     "theme.conf",
     "*.html",
+    "_templates/*.html",
     "static/css/*.css",
+    "static/search/*",
     "components/*.html",
     "partials/*.html",
     "scripts/*.js",

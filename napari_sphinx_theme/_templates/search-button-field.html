@@ -1,0 +1,22 @@
+{%- if theme_search == 'pagefind' %}
+{# Unified napari.org search (Pagefind Component UI). The installer mounts a
+   search trigger into this element and a single modal, and merges sibling
+   napari.org sites' indexes — see napari-search-installer.js and the canonical
+   merge list in static/search/napari-sites.json. #}
+<div class="napari-search"></div>
+<script
+  src="{{ pathto('_static/search/napari-search-installer.js', 1) }}"
+  data-bundle-path="{{ pathto('', 1) }}pagefind/"
+  data-mount=".napari-search"
+  defer
+></script>
+{%- else %}
+{# Identical to pydata-sphinx-theme's components/search-button-field.html, kept
+   here so the theme's `search` option can swap Sphinx search for the unified
+   Pagefind search without changing the default markup. #}
+<button class="btn search-button-field search-button__button pst-js-only" title="{{ _('Search') }}" aria-label="{{ _('Search') }}" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">{{ _('Search') }}</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+{%- endif %}

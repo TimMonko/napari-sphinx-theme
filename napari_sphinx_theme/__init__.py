@@ -1,14 +1,20 @@
 from __future__ import annotations
 
+import importlib.util
+import subprocess
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from docutils.nodes import Node
+from sphinx.util import logging
 
 from .napari_code_theme import NapariCodeTheme
 
 if TYPE_CHECKING:
     from sphinx.application import Sphinx
+
+logger = logging.getLogger(__name__)
 
 try:
     from ._version import version as __version__
@@ -69,6 +75,58 @@ def set_config_defaults(app: Sphinx) -> None:
     app.builder.theme_options = theme
 
 
+def _search_enabled(app: Sphinx) -> bool:
+    """Whether the site opted into the unified Pagefind search."""
+    try:
+        options: dict[str, Any] | None = app.builder.theme_options
+    except AttributeError:
+        return False
+    return bool(options and options.get("search") == "pagefind")
+
+
+def run_pagefind(app: Sphinx, exception: BaseException | None) -> None:
+    """Build the pagefind search index for opted-in sites.
+
+    The theme owns the pagefind build step (see docs/adr/0001-theme-owns-
+    unified-search.md). It runs after every HTML build when
+    ``search = "pagefind"``, so adopting sites must NOT run pagefind in CI
+    themselves (double indexing). If pagefind is missing or fails, warn loudly
+    and continue — the search UI degrades gracefully in the browser.
+    """
+    if exception is not None or app.builder.format != "html":
+        return
+    if not _search_enabled(app):
+        return
+    if importlib.util.find_spec("pagefind") is None:
+        logger.warning(
+            "napari-sphinx-theme: search='pagefind' but the 'pagefind' package "
+            "is not installed; install the 'search' extra or run pagefind "
+            "yourself, or the site's search will not work."
+        )
+        return
+    cmd = [
+        sys.executable,
+        "-m",
+        "pagefind",
+        "--site",
+        str(app.outdir),
+        "--exclude-selectors",
+        ".headerlink",
+    ]
+    logger.info("napari-sphinx-theme: building pagefind search index...")
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    except OSError as exc:  # pragma: no cover
+        logger.warning("napari-sphinx-theme: failed to run pagefind: %s", exc)
+        return
+    if result.returncode != 0:
+        logger.warning(
+            "napari-sphinx-theme: pagefind failed:\n%s%s",
+            result.stdout,
+            result.stderr,
+        )
+
+
 def get_html_theme_path() -> list[str]:
     """Return list of HTML theme paths."""
     return [str(Path(__file__).parent.parent.resolve())]
@@ -86,6 +144,7 @@ def setup(app: Sphinx) -> dict[str, Any]:
     # connect event handlers for configuration and template processing
     app.connect("builder-inited", set_config_defaults)
     app.connect("html-page-context", setup_html_template_context)
+    app.connect("build-finished", run_pagefind)
 
     # add sidebar templates to the search path for templates
     app.config.templates_path.append(str(here / "_templates"))
