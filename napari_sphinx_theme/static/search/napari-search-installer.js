@@ -31,6 +31,10 @@
 // - data-merge-paths: optional comma-separated list of sibling pagefind bundle
 //   paths, overriding the canonical merge list (napari-sites.json).
 // - data-placeholder: optional text shown on the search trigger button.
+// - data-remove: optional comma-separated CSS selectors for the host site's own
+//   search UI that should be removed (e.g. `.myst-search-bar` on the mystmd
+//   workshops site), so the page ends up with exactly one search. Like the
+//   `#pst-search-dialog` removal, this runs on mount.
 //
 // The canonical merge list lives in napari-sites.json beside this script and is
 // maintained in ONE place. Sites listed there that haven't built pagefind yet
@@ -52,6 +56,10 @@
   window.__napariSearchInstallerMounted = true;
 
   const bundlePath = thisScript.dataset.bundlePath;
+  const removeSelectors = (thisScript.dataset.remove || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
   const mergePaths = (thisScript.dataset.mergePaths || '')
     .split(',')
     .map((s) => s.trim())
@@ -233,12 +241,14 @@
       });
     }
 
-    // pydata-sphinx-theme also binds Ctrl/Cmd+K and the search button to its
-    // (now removed) search dialog. pydata's handler is null-guarded
-    // (`t && ...`), so once the dialog is gone it becomes a silent no-op and
-    // our capture-phase handler below opens the pagefind modal instead.
+    // Neutralise the host site's own search UI so the page ends up with exactly
+    // one search: pydata's dialog (Sphinx) plus anything the site opted into
+    // via data-remove (e.g. mystmd's `.myst-search-bar`).
     const dialog = document.getElementById('pst-search-dialog');
     if (dialog) dialog.remove();
+    removeSelectors.forEach((selector) => {
+      document.querySelectorAll(selector).forEach((el) => el.remove());
+    });
     window.addEventListener(
       'keydown',
       (event) => {

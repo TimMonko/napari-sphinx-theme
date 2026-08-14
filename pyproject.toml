@@ -112,6 +112,11 @@ isort.required-imports = ["from __future__ import annotations"]
 # scripts/ is for dev tooling (e.g. verify_search.py): print() for CLI output,
 # and the playwright import is deferred so --sanity works without it installed.
 "scripts/**" = ["T20", "PLC0415"]
+# search.py is the theme's CLI entry point — print() is its stdout UX.
+"napari_sphinx_theme/search.py" = ["T201"]
+# __init__.py lazily imports the search submodule to keep package import light
+# and avoid `python -m napari_sphinx_theme.search` double-importing it.
+"napari_sphinx_theme/__init__.py" = ["PLC0415"]
 
 [tool.mypy]
 python_version = "3.13"
