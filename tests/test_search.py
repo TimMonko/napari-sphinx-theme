@@ -84,14 +84,11 @@ def test_search_inject_copies_assets_and_mounts(tmp_path: Path) -> None:
         "<html><body><p>segmentation content</p></body></html>"
     )
 
-    count = search.inject(
-        site, base_url="/workshops/", remove_selectors=(".myst-search-bar",)
-    )
+    count = search.inject(site, base_url="/workshops/")
     text = (site / "index.html").read_text()
     assert count == 1
     assert "napari-search-installer.js" in text
     assert 'data-bundle-path="/workshops/pagefind/"' in text
-    assert 'data-remove=".myst-search-bar"' in text
     # Runtime assets were copied in from the theme package.
     for name in search.SEARCH_ASSETS:
         assert (site / "_static" / "search" / name).is_file()

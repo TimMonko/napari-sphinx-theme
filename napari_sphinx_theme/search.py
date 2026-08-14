@@ -15,7 +15,7 @@ Sphinx/pydata sites get all of this automatically from the theme's
 hooks use this module's CLI from their own build system instead::
 
     python -m napari_sphinx_theme.search prepare --site docs/_build/html \
-        --base-url /workshops/ --remove .myst-search-bar
+        --base-url /workshops/
 
 The Pagefind INDEX itself is always per-site — it is built from that site's own
 HTML, so it can never be "shipped" from the theme. This module only centralises
@@ -93,14 +93,10 @@ def _installer_snippet(
     base_url: str,
     mount_selector: str,
     mount_class: str,
-    remove_selectors: tuple[str, ...],
 ) -> str:
     classes = mount_selector.lstrip(".")
     if mount_class:
         classes += f" {mount_class.lstrip('.')}"
-    extra = ""
-    if remove_selectors:
-        extra = f'\n  data-remove="{", ".join(remove_selectors)}"'
     # Normalise base_url so it never yields a double slash ("" -> "/x", "/s/" -> "/s/x").
     base = base_url.rstrip("/")
     return (
@@ -109,7 +105,7 @@ def _installer_snippet(
         f'  src="{base}/_static/search/napari-search-installer.js"\n'
         f'  data-bundle-path="{base}/pagefind/"\n'
         f'  data-mount="{mount_selector}"\n'
-        f'  data-placeholder="Search"{extra}\n'
+        f'  data-placeholder="Search"\n'
         "  defer\n"
         "></script>\n"
         "</body>"
@@ -121,20 +117,18 @@ def inject(
     base_url: str = "",
     mount_selector: str = MOUNT_DEFAULT,
     mount_class: str = "",
-    remove_selectors: tuple[str, ...] = (),
 ) -> int:
     """Copy assets into the build and mount the search widget on every page.
 
     For non-Sphinx sites: copies the runtime assets into ``<site>/_static/
     search/`` and injects the mount div + installer script before ``</body>``
-    on each HTML page. ``remove_selectors`` are host search UIs to strip (e.g.
-    ``.myst-search-bar``) so the site ends up with exactly one search.
+    on each HTML page. Host sites hide their own search bar via their theme
+    config (e.g. mystmd ``site.options.hide_search``) — never by DOM removal,
+    which breaks React-hydrated pages.
     """
     build = pathlib.Path(site_dir)
     copy_assets(build / "_static" / "search")
-    snippet = _installer_snippet(
-        base_url, mount_selector, mount_class, remove_selectors
-    )
+    snippet = _installer_snippet(base_url, mount_selector, mount_class)
     count = 0
     for html_file in build.rglob("*.html"):
         text = html_file.read_text(encoding="utf-8")
@@ -153,7 +147,6 @@ def prepare(
     exclude_selectors: tuple[str, ...] = (".headerlink",),
     mount_selector: str = MOUNT_DEFAULT,
     mount_class: str = "",
-    remove_selectors: tuple[str, ...] = (),
 ) -> int:
     """Index + inject: the whole non-Sphinx site flow in one call."""
     result = build_index(site_dir, exclude_selectors)
@@ -169,7 +162,7 @@ def prepare(
             f"napari-sphinx-theme: pagefind failed:\n{result.stdout}\n{result.stderr}"
         )
         return result.returncode
-    count = inject(site_dir, base_url, mount_selector, mount_class, remove_selectors)
+    count = inject(site_dir, base_url, mount_selector, mount_class)
     print(
         f"napari-sphinx-theme: built pagefind index and injected into {count} page(s)"
     )
@@ -205,18 +198,10 @@ def main(argv: list[str] | None = None) -> int:
     p_prepare.add_argument(
         "--mount-class", default="", help="extra class(es) for the mount div"
     )
-    p_prepare.add_argument(
-        "--remove",
-        action="append",
-        default=[],
-        metavar="SEL",
-        help="host search UI element to strip, e.g. .myst-search-bar (repeatable)",
-    )
     p_prepare.set_defaults(func=prepare)
 
     args = parser.parse_args(argv)
     exclude = tuple(args.exclude_selectors) or (".headerlink",)
-    remove = tuple(args.remove)
     func = cast(Callable[..., int], args.func)
     return func(
         site_dir=args.site,
@@ -224,7 +209,6 @@ def main(argv: list[str] | None = None) -> int:
         exclude_selectors=exclude,
         mount_selector=args.mount_selector,
         mount_class=args.mount_class,
-        remove_selectors=remove,
     )
 
 
