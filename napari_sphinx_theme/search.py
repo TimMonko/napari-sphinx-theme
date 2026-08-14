@@ -93,18 +93,26 @@ def _installer_snippet(
     base_url: str,
     mount_selector: str,
     mount_class: str,
+    hook_button: str = "",
 ) -> str:
-    classes = mount_selector.lstrip(".")
-    if mount_class:
-        classes += f" {mount_class.lstrip('.')}"
     # Normalise base_url so it never yields a double slash ("" -> "/x", "/s/" -> "/s/x").
     base = base_url.rstrip("/")
+    mount_div = ""
+    if hook_button:
+        # Hook the host's own search button (e.g. `.myst-search-bar`) so its
+        # visual is kept but it opens the Pagefind modal.
+        trigger = f'  data-hook-button="{hook_button}"'
+    else:
+        classes = mount_selector.lstrip(".")
+        if mount_class:
+            classes += f" {mount_class.lstrip('.')}"
+        mount_div = f'<div class="{classes}"></div>\n'
+        trigger = f'  data-mount="{mount_selector}"'
     return (
-        f'<div class="{classes}"></div>\n'
-        "<script\n"
+        f"{mount_div}<script\n"
         f'  src="{base}/_static/search/napari-search-installer.js"\n'
         f'  data-bundle-path="{base}/pagefind/"\n'
-        f'  data-mount="{mount_selector}"\n'
+        f"{trigger}\n"
         f'  data-placeholder="Search"\n'
         "  defer\n"
         "></script>\n"
@@ -117,22 +125,24 @@ def inject(
     base_url: str = "",
     mount_selector: str = MOUNT_DEFAULT,
     mount_class: str = "",
+    hook_button: str = "",
 ) -> int:
-    """Copy assets into the build and mount the search widget on every page.
+    """Copy assets into the build and mount/hook the search widget.
 
     For non-Sphinx sites: copies the runtime assets into ``<site>/_static/
-    search/`` and injects the mount div + installer script before ``</body>``
-    on each HTML page. Host sites hide their own search bar via their theme
-    config (e.g. mystmd ``site.options.hide_search``) — never by DOM removal,
-    which breaks React-hydrated pages.
+    search/`` and injects the installer script before ``</body>`` on each HTML
+    page. Either ``hook_button`` (keep the host's own search button and open
+    the Pagefind modal on its click) or a mount div + ``data-mount`` (inject a
+    trigger into an element) is used. Never hide a host search bar by DOM
+    removal — it breaks React-hydrated pages.
     """
     build = pathlib.Path(site_dir)
     copy_assets(build / "_static" / "search")
-    snippet = _installer_snippet(base_url, mount_selector, mount_class)
+    snippet = _installer_snippet(base_url, mount_selector, mount_class, hook_button)
     count = 0
     for html_file in build.rglob("*.html"):
         text = html_file.read_text(encoding="utf-8")
-        if mount_selector.lstrip(".") in text and "napari-search-installer.js" in text:
+        if "napari-search-installer.js" in text:
             continue
         if "</body>" not in text:
             continue
@@ -147,6 +157,7 @@ def prepare(
     exclude_selectors: tuple[str, ...] = (".headerlink",),
     mount_selector: str = MOUNT_DEFAULT,
     mount_class: str = "",
+    hook_button: str = "",
 ) -> int:
     """Index + inject: the whole non-Sphinx site flow in one call."""
     result = build_index(site_dir, exclude_selectors)
@@ -162,7 +173,7 @@ def prepare(
             f"napari-sphinx-theme: pagefind failed:\n{result.stdout}\n{result.stderr}"
         )
         return result.returncode
-    count = inject(site_dir, base_url, mount_selector, mount_class)
+    count = inject(site_dir, base_url, mount_selector, mount_class, hook_button)
     print(
         f"napari-sphinx-theme: built pagefind index and injected into {count} page(s)"
     )
@@ -198,6 +209,13 @@ def main(argv: list[str] | None = None) -> int:
     p_prepare.add_argument(
         "--mount-class", default="", help="extra class(es) for the mount div"
     )
+    p_prepare.add_argument(
+        "--hook-button",
+        default="",
+        metavar="SEL",
+        help="keep the host's own search button (selector) and open the Pagefind "
+        "modal on its click, instead of injecting a mount div",
+    )
     p_prepare.set_defaults(func=prepare)
 
     args = parser.parse_args(argv)
@@ -209,6 +227,7 @@ def main(argv: list[str] | None = None) -> int:
         exclude_selectors=exclude,
         mount_selector=args.mount_selector,
         mount_class=args.mount_class,
+        hook_button=args.hook_button,
     )
 
 

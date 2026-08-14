@@ -32,7 +32,11 @@
   --pf-modal-top: 10dvh;
 }
 
-html[data-theme='dark'] {
+/* pydata-sphinx-theme signals dark mode with data-theme="dark"; mystmd's book
+   theme uses a Tailwind `dark` class on <html>. Match both so the search modal
+   follows the host's theme either way. */
+html[data-theme='dark'],
+html.dark {
   --pf-text: #f1f1f1;
   --pf-text-secondary: var(--napari-light-gray, #a0a0a0);
   --pf-text-muted: var(--napari-dark-gray, #949494);

@@ -190,28 +190,28 @@
 
     if (hookButton) {
       // Hook an existing themed search button (pydata-sphinx-theme's
-      // `.search-button__button`) so the navbar keeps its own on-brand visual.
-      // Capture-phase + stopImmediatePropagation so pydata's own handler (which
-      // targets the Sphinx dialog we remove below) never runs.
-      const buttons = document.querySelectorAll(hookButton);
-      if (!buttons.length) {
+      // `.search-button__button`, mystmd's `.myst-search-bar`, ...) so the page
+      // keeps its on-brand search visual while the click opens the Pagefind
+      // modal. Document-level capture fires before the host's own handlers
+      // (React/Radix included) and survives re-renders, so preventDefault +
+      // stopPropagation keeps the host's own search UI from also opening.
+      if (!document.querySelector(hookButton)) {
         console.warn(
           `napari-search-installer: no element matches ${hookButton}`,
         );
       }
-      buttons.forEach((btn) => {
-        if (btn.dataset.napariSearchHooked) return;
-        btn.dataset.napariSearchHooked = 'true';
-        btn.addEventListener(
-          'click',
-          (event) => {
+      document.addEventListener(
+        'click',
+        (event) => {
+          const target = event.target;
+          if (target && target.closest && target.closest(hookButton)) {
             event.preventDefault();
-            event.stopImmediatePropagation();
+            event.stopPropagation();
             modal.open();
-          },
-          true,
-        );
-      });
+          }
+        },
+        true,
+      );
     } else {
       // Inject a trigger into every mount (e.g. desktop + mobile navbar
       // variants, or a custom floating button on non-Sphinx sites).
@@ -246,6 +246,9 @@
         if (mod && !event.shiftKey && !event.altKey) {
           if (event.key.toLowerCase() === 'k') {
             event.preventDefault();
+            // Also stop the host's own search shortcut (e.g. mystmd binds
+            // Ctrl+K on `document`) from opening a second search UI.
+            event.stopPropagation();
             if (modal && modal.open) modal.open();
           }
         }
