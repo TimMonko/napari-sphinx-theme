@@ -41,6 +41,7 @@ dev = [
   "mypy",
   "pyyaml",
   "pre-commit",
+  "pytest",
   "types-docutils",
   { include-group = "docs" },
 ]
