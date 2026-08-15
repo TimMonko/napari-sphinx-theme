@@ -26,12 +26,21 @@ Usage::
     python scripts/verify_search.py --dir docs/_build/html --port 8342
     python scripts/verify_search.py --dir docs/_build/html --sanity   # no browser
 
-Cross-site (does the merge actually pull sibling results?)::
+Cross-site, browser-free (proves builds are CONNECTED for the merge; needs only
+stdlib, so it runs from any python on any OS):
+
+    # Serve the builds at their canonical paths and check that every one is
+    # well-formed, listed in the merge list, and reachable by the installer.
+    python scripts/verify_search.py \
+        --sites docs=../napari-docs/docs/_build/html workshops=../napari-workshops/docs/_build/html \
+        --from-site docs --sanity
+
+Cross-site, with a real browser (reports actual merged result COUNTS):
 
     # Serve several built sites at their canonical napari.org paths and search
     # from one of them; reports how many results come from each sibling site.
     python scripts/verify_search.py \
-        --sites docs=C:/path/docs/_build/html workshops=C:/path/workshops/docs/_build/html \
+        --sites docs=../napari-docs/docs/_build/html workshops=../napari-workshops/docs/_build/html \
         --from-site docs --queries segmentation plugin
 
 Exit code is 0 if every query returned at least one result, 1 otherwise.
@@ -46,6 +55,7 @@ import pathlib
 import re
 import sys
 import threading
+import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
@@ -206,6 +216,96 @@ def _bundle_sanity(build_dir: pathlib.Path) -> list[str]:
     ):
         problems.append("pagefind index chunks are empty")
     return problems
+
+
+def _site_entry_url(name: str, port: int) -> str:
+    """Canonical URL of a site's pagefind-entry.json when served via --sites."""
+    base = SITE_MOUNTS.get(name, [f"/{name}/"])[0]
+    return f"http://127.0.0.1:{port}/{base.lstrip('/')}pagefind/pagefind-entry.json"
+
+
+def _entry_reachable(url: str) -> bool:
+    """True if a pagefind-entry.json is reachable and valid JSON.
+
+    This is the installer's merge probe: 404s, timeouts, or non-JSON responses
+    mean the bundle is dead and would be dropped from the merge.
+    """
+    try:
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            if resp.status != 200:
+                return False
+            json.loads(resp.read().decode("utf-8"))
+            return True
+    except (OSError, ValueError):
+        return False
+
+
+def _site_merge_names(build_dir: pathlib.Path) -> set[str]:
+    """Sites listed in a build's canonical merge list (napari-sites.json)."""
+    sites_file = build_dir / "_static" / "search" / "napari-sites.json"
+    if not sites_file.is_file():
+        return set()
+    try:
+        data = json.loads(sites_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    return {site["name"] for site in data.get("sites", []) if "name" in site}
+
+
+def _sanity_sites(sites: dict[str, pathlib.Path], port: int, from_site: str) -> int:
+    """Browser-free cross-site verification (stdlib only; runs on any OS).
+
+    Serves each build at its canonical napari.org path and checks everything
+    that has to be true for the merge to work:
+
+    * every passed build has a well-formed pagefind bundle;
+    * every passed sibling is listed in the from-site's canonical merge list
+      (the installer only merges sites on napari-sites.json);
+    * every passed site's pagefind-entry.json is reachable + valid at its
+      canonical path (the installer's exact probe).
+
+    It cannot report merged result COUNTS -- those need pagefind's WASM inside a
+    browser (drop --sanity for that). Returns an exit code.
+    """
+    problems: list[str] = []
+    server = _serve_sites(sites, port)
+    try:
+        print("\n### Cross-site sanity (browser-free)\n")
+        for name, build_dir in sites.items():
+            local = _bundle_sanity(build_dir)
+            if local:
+                for problem in local:
+                    print(f"- {name}: {problem}")
+                    problems.append(f"{name}: {problem}")
+            else:
+                print(f"- {name}: bundle OK")
+
+        merged = _site_merge_names(sites[from_site])
+        print(
+            f"\nmerge list from {from_site} (napari-sites.json): "
+            f"{', '.join(sorted(merged)) or '(none)'}"
+        )
+        for name in sites:
+            if name != from_site and name not in merged:
+                print(f"  ! {name} is NOT in {from_site}'s merge list")
+                problems.append(f"{name} not in {from_site} merge list")
+
+        print("\nreachability (pagefind-entry.json at canonical path):")
+        for name in sites:
+            url = _site_entry_url(name, port)
+            ok = _entry_reachable(url)
+            print(f"- {name}: {'ok' if ok else 'DEAD'}")
+            if not ok:
+                problems.append(f"{name} bundle unreachable at {url}")
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    if problems:
+        print("\nFAILED")
+        return 1
+    print("\nOK: all builds well-formed and connected")
+    return 0
 
 
 def run_browser_checks(
@@ -484,6 +584,8 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 1
+        if args.sanity:
+            return _sanity_sites(sites, args.port, args.from_site)
         _serve_sites(sites, args.port)
         base = SITE_MOUNTS.get(args.from_site, [f"/{args.from_site}/"])[0]
         url = f"http://127.0.0.1:{args.port}/{base.lstrip('/')}"

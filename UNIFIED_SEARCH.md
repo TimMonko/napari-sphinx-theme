@@ -136,10 +136,19 @@ python scripts/verify_search.py --sanity --dir <build>
 python scripts/verify_search.py --dir C:/path/to/_build/html \
     --queries segmentation plugin viewer
 
-# Cross-site merge: serve builds at their canonical paths and prove results
-# come back merged, from the right sites (e.g. `thebe` is workshops-only,
-# `watershed` appears in both docs and workshops)
-python scripts/verify_search.py --sites \
+# Cross-site, browser-free (stdlib only — runs from PowerShell and WSL with
+# uv, no playwright/browser needed): proves the builds are CONNECTED for the
+# merge — each bundle well-formed, listed in the merge list, and reachable at
+# its canonical path.
+uv run --no-project python scripts/verify_search.py --sites \
+    docs=../napari-docs/docs/_build/html \
+    workshops=../napari-workshops/docs/_build/html \
+    --from-site docs --sanity
+
+# Cross-site with a real browser: reports actual merged result COUNTS by site
+# (e.g. `thebe` is workshops-only, `watershed` appears in both docs and
+# workshops). Needs playwright + a browser (see note below).
+uv run --with playwright python scripts/verify_search.py --sites \
     docs=../napari-docs/docs/_build/html \
     workshops=../napari-workshops/docs/_build/html \
     --from-site docs --queries thebe watershed
@@ -148,9 +157,14 @@ python scripts/verify_search.py --sites \
 python scripts/verify_search.py --url http://127.0.0.1:3001 --queries plugin
 ```
 
-`--sanity` needs no browser (browser-free bundle check). The other modes use
-Playwright: it auto-detects a system Chrome/Edge (no `playwright install`
-download needed) and falls back to Playwright's bundled Chromium. In a
+`--sanity` needs no browser and no Playwright — stdlib only, so it runs with a
+bare `python` (or `uv run --no-project python`) from PowerShell or WSL. With
+`--dir` it checks one build's bundle; with `--sites` it also proves cross-site
+connectivity (merge-list membership + bundle reachability at canonical paths) —
+but it cannot report actual result counts, which need pagefind's WASM in a
+browser. The browser modes use Playwright: it auto-detects a system Chrome/Edge
+(no `playwright install` download needed) and falls back to Playwright's
+bundled Chromium. In a
 container or CI without a system browser, install the bundled browser + its
 system libraries once first, otherwise the launch fails with something like
 `libnspr4.so: cannot open shared object file`:
