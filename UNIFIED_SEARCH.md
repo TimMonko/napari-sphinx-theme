@@ -128,30 +128,27 @@ and the modal follows.
 
 `scripts/verify_search.py` drives the real modal in a headless browser:
 
+Commands are written as single lines so they run unchanged in both PowerShell
+and bash (for multi-line, PowerShell uses a trailing backtick, bash a trailing
+backslash):
+
 ```sh
 # Browser-free: is the pagefind bundle sane?
 python scripts/verify_search.py --sanity --dir <build>
 
 # Full check: serve a build, open the modal, assert queries return results
-python scripts/verify_search.py --dir C:/path/to/_build/html \
-    --queries segmentation plugin viewer
+python scripts/verify_search.py --dir C:/path/to/_build/html --queries segmentation plugin viewer
 
 # Cross-site, browser-free (stdlib only — runs from PowerShell and WSL with
 # uv, no playwright/browser needed): proves the builds are CONNECTED for the
 # merge — each bundle well-formed, listed in the merge list, and reachable at
 # its canonical path.
-uv run --no-project python scripts/verify_search.py --sites \
-    docs=../napari-docs/docs/_build/html \
-    workshops=../napari-workshops/docs/_build/html \
-    --from-site docs --sanity
+uv run --no-project python scripts/verify_search.py --sites docs=../napari-docs/docs/_build/html workshops=../napari-workshops/docs/_build/html --from-site docs --sanity
 
 # Cross-site with a real browser: reports actual merged result COUNTS by site
 # (e.g. `thebe` is workshops-only, `watershed` appears in both docs and
 # workshops). Needs playwright + a browser (see note below).
-uv run --with playwright python scripts/verify_search.py --sites \
-    docs=../napari-docs/docs/_build/html \
-    workshops=../napari-workshops/docs/_build/html \
-    --from-site docs --queries thebe watershed
+uv run --with playwright python scripts/verify_search.py --sites docs=../napari-docs/docs/_build/html workshops=../napari-workshops/docs/_build/html --from-site docs --queries thebe watershed
 
 # Against an already-running server
 python scripts/verify_search.py --url http://127.0.0.1:3001 --queries plugin

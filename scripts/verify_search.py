@@ -31,17 +31,14 @@ stdlib, so it runs from any python on any OS):
 
     # Serve the builds at their canonical paths and check that every one is
     # well-formed, listed in the merge list, and reachable by the installer.
-    python scripts/verify_search.py \
-        --sites docs=../napari-docs/docs/_build/html workshops=../napari-workshops/docs/_build/html \
-        --from-site docs --sanity
+    # (Single line so it runs unchanged in both PowerShell and bash.)
+    python scripts/verify_search.py --sites docs=../napari-docs/docs/_build/html workshops=../napari-workshops/docs/_build/html --from-site docs --sanity
 
-Cross-site, with a real browser (reports actual merged result COUNTS):
+Cross-site, with a real browser (reports actual merged result COUNTS)::
 
     # Serve several built sites at their canonical napari.org paths and search
     # from one of them; reports how many results come from each sibling site.
-    python scripts/verify_search.py \
-        --sites docs=../napari-docs/docs/_build/html workshops=../napari-workshops/docs/_build/html \
-        --from-site docs --queries segmentation plugin
+    python scripts/verify_search.py --sites docs=../napari-docs/docs/_build/html workshops=../napari-workshops/docs/_build/html --from-site docs --queries segmentation plugin
 
 Exit code is 0 if every query returned at least one result, 1 otherwise.
 """
