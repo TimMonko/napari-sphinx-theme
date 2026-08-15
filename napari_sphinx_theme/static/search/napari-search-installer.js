@@ -134,8 +134,6 @@
   }
 
   async function mount() {
-    loadStylesheet(`${ownDir}napari-search.css`);
-
     // Resolve the merge list BEFORE any component connects, so the unified
     // instance is configured correctly from the start. Every candidate bundle is
     // probed and dead ones dropped — see probeMergeBundles.
@@ -168,8 +166,13 @@
       );
     }
 
-    // Load the Pagefind Component UI from this site's own bundle.
+    // Load the Pagefind Component UI from this site's own bundle. Its CSS goes
+    // FIRST and our napari-search.css LAST so our --pf-* overrides win the
+    // cascade: the component also declares its defaults on :root, and at equal
+    // specificity the later stylesheet wins — so loading ours first would mean
+    // the component's defaults (loaded second) silently beat our light theme.
     loadStylesheet(`${bundleUrl}pagefind-component-ui.css`);
+    loadStylesheet(`${ownDir}napari-search.css`);
     await loadModule(`${bundleUrl}pagefind-component-ui.js`);
 
     const { configureInstance } = window.PagefindComponents;

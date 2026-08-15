@@ -1,5 +1,8 @@
 """Theme-owned tooling for the unified napari.org search (single source).
 
+See ``UNIFIED_SEARCH.md`` (repo root) for how the whole feature fits together,
+how the theming is inherited, and how to test it locally.
+
 The theme is the single source for everything that can be shared across the
 napari.org sub-sites:
 

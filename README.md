@@ -12,6 +12,15 @@ the configurations and affordances provided by the
 [PyData Sphinx Theme](https://pydata-sphinx-theme.readthedocs.io/en/latest/)
 can be used within the [napari docs](https://github.com/napari/docs).
 
+## Unified search
+
+The theme ships a unified, cross-sub-site search for napari.org built on
+[Pagefind](https://pagefind.app)'s Component UI — one search box that searches
+every sub-site at once. The theme owns the installer, the theming, the
+canonical merge list, and the build/inject tooling; each site owns its own
+index. See **[UNIFIED_SEARCH.md](UNIFIED_SEARCH.md)** for how it works, how the
+theming is inherited, and how to test it locally.
+
 ## Installation
 
 After creating a virtual environment, install the theme in editable mode:

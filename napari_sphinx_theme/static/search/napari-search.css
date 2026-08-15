@@ -1,15 +1,35 @@
 /* napari brand theming for Pagefind's Component UI.
-   The Component UI isolates itself (all: initial) and exposes --pf-* custom
-   properties as the only theming lever — these are the only variables that
-   cascade in. Where possible they reference the napari theme tokens so the
-   search stays on-brand when the theme palette changes. */
+ *
+ * The Component UI isolates itself (`all: initial`) and exposes `--pf-*`
+ * custom properties as the ONLY theming lever — these are the only variables
+ * that cascade in. We declare them on `:root` and point them at the theme's
+ * tokens so the search follows the palette automatically.
+ *
+ * INHERITANCE — how `var(--napari-color-text-base)` reaches the modal:
+ *   1. napari-sphinx-theme.css sets `--napari-*` on <html>, e.g.
+ *      `--napari-color-text-base` is `black` under `html[data-theme='light']`
+ *      and `white` under `html[data-theme='dark']`.
+ *   2. CSS custom properties inherit DOWN the tree and THROUGH shadow DOM, so
+ *      the pagefind modal (appended to <body>) inherits `--pf-*` from `:root`
+ *      and `--napari-*` from <html>.
+ *   3. `var()` is resolved LAZILY at the point of use, so `--pf-text` re-reads
+ *      `--napari-color-text-base` wherever it is used — which is why one rule
+ *      follows the host's light/dark theme with zero JS.
+ *   Fallback order below: pydata's already-themed `--pst-*` tokens first (they
+ *   exist on pydata sites and are mode-specific), then napari `--napari-*`
+ *   tokens, then a hex last resort. Values with NO theme equivalent (modal
+ *   background, skeleton, error reds) stay local to the modal by design. */
 
 :root {
+  /* text + accents */
   --pf-text: var(--napari-color-text-base, #23252f);
-  --pf-text-secondary: var(--napari-dark-gray, #686868);
+  --pf-text-secondary: var(
+    --pst-color-text-muted,
+    var(--napari-dark-gray, #686868)
+  );
   --pf-text-muted: var(--napari-light-gray, #9ca4af);
   --pf-background: #ffffff;
-  --pf-border: #d9dbe1;
+  --pf-border: var(--napari-light-gray, #d9dbe1);
   --pf-border-focus: var(--napari-deep-blue, #009bf2);
   --pf-outline-focus: var(--napari-deep-blue, #009bf2);
   --pf-outline-width: 2px;
@@ -23,6 +43,7 @@
   --pf-error-text: #b91c1c;
   --pf-error-text-secondary: #dc2626;
 
+  /* geometry + typography */
   --pf-border-radius: 6px;
   --pf-font: var(--pst-font-family-base, inherit);
   --pf-input-height: 36px;
@@ -32,16 +53,21 @@
   --pf-modal-top: 10dvh;
 }
 
-/* pydata-sphinx-theme signals dark mode with data-theme="dark"; mystmd's book
-   theme uses a Tailwind `dark` class on <html>. Match both so the search modal
-   follows the host's theme either way. */
+/* Dark mode: pydata-sphinx-theme signals it with `data-theme="dark"`; mystmd's
+   book theme uses a Tailwind `dark` class on <html>. Match both so the modal
+   follows the host either way. Where the theme already themes a token per mode
+   (e.g. --napari-color-text-base is white here), we keep referencing it rather
+   than hardcoding, so palette changes propagate. */
 html[data-theme='dark'],
 html.dark {
-  --pf-text: #f1f1f1;
-  --pf-text-secondary: var(--napari-light-gray, #a0a0a0);
+  --pf-text: var(--napari-color-text-base, #f1f1f1);
+  --pf-text-secondary: var(
+    --pst-color-text-muted,
+    var(--napari-light-gray, #a0a0a0)
+  );
   --pf-text-muted: var(--napari-dark-gray, #949494);
   --pf-background: #1e1e21;
-  --pf-border: #3c3e46;
+  --pf-border: var(--napari-dark-gray, #3c3e46);
   --pf-border-focus: var(--napari-deep-blue, #009bf2);
   --pf-outline-focus: var(--napari-deep-blue, #009bf2);
   --pf-hover: #2c2e36;
@@ -54,7 +80,7 @@ html.dark {
   --pf-error-text-secondary: #ef4444;
 }
 
-/* The mount point for the navbar search trigger. */
+/* The mount point for a navbar search trigger (data-mount mode). */
 .napari-search {
   display: inline-flex;
   align-items: center;
