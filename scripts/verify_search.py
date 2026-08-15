@@ -15,7 +15,9 @@ failure modes that actually bite in production:
 
 Requires Playwright (``pip install playwright``). A Playwright browser is used
 if installed; otherwise the system Chrome/Edge is launched automatically, so no
-``playwright install`` download is needed on most machines.
+``playwright install`` download is needed on most machines. In containers or CI
+without a system browser, run ``python -m playwright install --with-deps
+chromium`` once first (the bundled Chromium needs its system libraries).
 
 Usage::
 
@@ -71,6 +73,7 @@ SYSTEM_BROWSERS = [
     "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
     # Linux
     "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
     "/usr/bin/chromium",
     "/usr/bin/chromium-browser",
     "/usr/bin/microsoft-edge",
@@ -82,6 +85,39 @@ def _find_system_browser() -> str | None:
         if pathlib.Path(candidate).exists():
             return candidate
     return None
+
+
+def _launch_browser(p: Any) -> Any:
+    """Launch Playwright's Chromium, preferring an installed system browser.
+
+    Falls back to Playwright's bundled Chromium. If neither can start (common
+    in containers, where the bundled Chromium is missing system libraries such
+    as libnspr4), exit with an actionable message instead of a raw Playwright
+    traceback.
+    """
+    system_browser = _find_system_browser()
+    if system_browser:
+        try:
+            return p.chromium.launch(headless=True, executable_path=system_browser)
+        except Exception as exc:  # noqa: BLE001 - fall back to bundled Chromium
+            print(
+                f"note: system browser {system_browser} failed ({exc}); "
+                "trying bundled Chromium"
+            )
+    try:
+        return p.chromium.launch(headless=True)
+    except Exception as exc:
+        message = (
+            "Could not launch a browser for the search checks.\n"
+            f"  reason: {exc}\n"
+            "  fix (Linux/container): install the Playwright browser and its deps:\n"
+            "    uv run --with playwright python -m playwright install "
+            "--with-deps chromium\n"
+            "  ...or install a system browser (e.g. "
+            "`sudo apt-get install -y chromium`)\n"
+            "      and it will be auto-detected. `--sanity` needs no browser."
+        )
+        raise SystemExit(message) from exc
 
 
 def _serve(build_dir: pathlib.Path, port: int) -> ThreadingHTTPServer:
@@ -183,11 +219,7 @@ def run_browser_checks(
     page_errors: list[str] = []
 
     with sync_playwright() as p:
-        system_browser = _find_system_browser()
-        if system_browser:
-            browser = p.chromium.launch(headless=True, executable_path=system_browser)
-        else:
-            browser = p.chromium.launch(headless=True)
+        browser = _launch_browser(p)
         page = browser.new_page()
         page.on(
             "pageerror",
@@ -281,11 +313,7 @@ def run_cross_site_checks(
     page_errors: list[str] = []
 
     with sync_playwright() as p:
-        system_browser = _find_system_browser()
-        if system_browser:
-            browser = p.chromium.launch(headless=True, executable_path=system_browser)
-        else:
-            browser = p.chromium.launch(headless=True)
+        browser = _launch_browser(p)
         page = browser.new_page()
         page.on(
             "pageerror",

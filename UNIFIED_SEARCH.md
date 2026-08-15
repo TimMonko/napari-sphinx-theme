@@ -137,19 +137,31 @@ python scripts/verify_search.py --dir C:/path/to/_build/html \
     --queries segmentation plugin viewer
 
 # Cross-site merge: serve builds at their canonical paths and prove results
-# come back merged, from the right sites
+# come back merged, from the right sites (e.g. `thebe` is workshops-only,
+# `watershed` appears in both docs and workshops)
 python scripts/verify_search.py --sites \
-    docs=C:/.../napari-docs/docs/_build/html \
-    workshops=C:/.../napari-workshops/docs/_build/html \
+    docs=../napari-docs/docs/_build/html \
+    workshops=../napari-workshops/docs/_build/html \
     --from-site docs --queries thebe watershed
 
 # Against an already-running server
 python scripts/verify_search.py --url http://127.0.0.1:3001 --queries plugin
 ```
 
-`--sanity` needs no browser. The other modes use Playwright against your system
-Edge/Chrome (`uv pip install playwright` in the theme venv; no `playwright install`
-download needed).
+`--sanity` needs no browser (browser-free bundle check). The other modes use
+Playwright: it auto-detects a system Chrome/Edge (no `playwright install`
+download needed) and falls back to Playwright's bundled Chromium. In a
+container or CI without a system browser, install the bundled browser + its
+system libraries once first, otherwise the launch fails with something like
+`libnspr4.so: cannot open shared object file`:
+
+```sh
+uv run --with playwright python -m playwright install --with-deps chromium
+```
+
+(`--with-deps` runs apt to install the system libs; `--with playwright` keeps
+the package out of your project env.) On a machine with Chrome/Edge installed,
+nothing is needed — the script finds it automatically.
 
 ### Manual smoke test
 
