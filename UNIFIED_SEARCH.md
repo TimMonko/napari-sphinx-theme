@@ -126,53 +126,26 @@ and the modal follows.
 
 ### Automated (theme repo)
 
-`scripts/verify_search.py` drives the real modal in a headless browser:
-
-Commands are written as single lines so they run unchanged in both PowerShell
-and bash (for multi-line, PowerShell uses a trailing backtick, bash a trailing
+`scripts/verify_search.py` checks that built sub-sites are wired up for the
+Pagefind merge — browser-free, stdlib only, so it runs from any python in
+PowerShell, WSL, or CI. Commands are single lines so they run unchanged in both
+shells (for multi-line, PowerShell uses a trailing backtick, bash a trailing
 backslash):
 
 ```sh
-# Browser-free: is the pagefind bundle sane?
-uv run --no-project python scripts/verify_search.py --sanity --dir <build>
+# One build: is its pagefind bundle present and well-formed?
+uv run --no-project python scripts/verify_search.py --dir docs/_build/html
 
-# Full check: serve a build, open the modal, assert queries return results
-uv run --with playwright python scripts/verify_search.py --dir C:/path/to/_build/html --queries segmentation plugin viewer
-
-# Cross-site, browser-free (stdlib only — runs from PowerShell and WSL with
-# uv, no playwright/browser needed): proves the builds are CONNECTED for the
-# merge — each bundle well-formed, listed in the merge list, and reachable at
-# its canonical path.
-uv run --no-project python scripts/verify_search.py --sites docs=../napari-docs/docs/_build/html workshops=../napari-workshops/docs/_build/html --from-site docs --sanity
-
-# Cross-site with a real browser: reports actual merged result COUNTS by site
-# (e.g. `thebe` is workshops-only, `watershed` appears in both docs and
-# workshops). Needs playwright + a browser (see note below).
-uv run --with playwright python scripts/verify_search.py --sites docs=../napari-docs/docs/_build/html workshops=../napari-workshops/docs/_build/html --from-site docs --queries thebe watershed
-
-# Against an already-running server
-uv run --with playwright python scripts/verify_search.py --url http://127.0.0.1:3001 --queries plugin
+# Two builds: are they CONNECTED for the merge? (each well-formed, in the
+# from-site's merge list, and reachable at its canonical path — the installer
+# probe)
+uv run --no-project python scripts/verify_search.py --sites docs=../napari-docs/docs/_build/html workshops=../napari-workshops/docs/_build/html --from-site docs
 ```
 
-`--sanity` needs no browser and no Playwright — stdlib only, so it runs with a
-bare `python` (or `uv run --no-project python`) from PowerShell or WSL. With
-`--dir` it checks one build's bundle; with `--sites` it also proves cross-site
-connectivity (merge-list membership + bundle reachability at canonical paths) —
-but it cannot report actual result counts, which need pagefind's WASM in a
-browser. The browser modes use Playwright: it auto-detects a system Chrome/Edge
-(no `playwright install` download needed) and falls back to Playwright's
-bundled Chromium. In a
-container or CI without a system browser, install the bundled browser + its
-system libraries once first, otherwise the launch fails with something like
-`libnspr4.so: cannot open shared object file`:
-
-```sh
-uv run --with playwright python -m playwright install --with-deps chromium
-```
-
-(`--with-deps` runs apt to install the system libs; `--with playwright` keeps
-the package out of your project env.) On a machine with Chrome/Edge installed,
-nothing is needed — the script finds it automatically.
+This verifies everything that has to be true for the merge to work, but it
+cannot report actual merged result COUNTS — those need pagefind's WASM inside a
+real browser. To check results visually, use the smoke test below (build,
+serve, open, search).
 
 ### Manual smoke test
 
