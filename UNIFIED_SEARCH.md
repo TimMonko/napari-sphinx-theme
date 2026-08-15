@@ -134,10 +134,10 @@ backslash):
 
 ```sh
 # Browser-free: is the pagefind bundle sane?
-python scripts/verify_search.py --sanity --dir <build>
+uv run --no-project python scripts/verify_search.py --sanity --dir <build>
 
 # Full check: serve a build, open the modal, assert queries return results
-python scripts/verify_search.py --dir C:/path/to/_build/html --queries segmentation plugin viewer
+uv run --with playwright python scripts/verify_search.py --dir C:/path/to/_build/html --queries segmentation plugin viewer
 
 # Cross-site, browser-free (stdlib only — runs from PowerShell and WSL with
 # uv, no playwright/browser needed): proves the builds are CONNECTED for the
@@ -151,7 +151,7 @@ uv run --no-project python scripts/verify_search.py --sites docs=../napari-docs/
 uv run --with playwright python scripts/verify_search.py --sites docs=../napari-docs/docs/_build/html workshops=../napari-workshops/docs/_build/html --from-site docs --queries thebe watershed
 
 # Against an already-running server
-python scripts/verify_search.py --url http://127.0.0.1:3001 --queries plugin
+uv run --with playwright python scripts/verify_search.py --url http://127.0.0.1:3001 --queries plugin
 ```
 
 `--sanity` needs no browser and no Playwright — stdlib only, so it runs with a

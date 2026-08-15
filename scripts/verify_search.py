@@ -40,7 +40,8 @@ Cross-site, with a real browser (reports actual merged result COUNTS)::
     # from one of them; reports how many results come from each sibling site.
     python scripts/verify_search.py --sites docs=../napari-docs/docs/_build/html workshops=../napari-workshops/docs/_build/html --from-site docs --queries segmentation plugin
 
-Exit code is 0 if every query returned at least one result, 1 otherwise.
+Exit code is 0 when the checks pass (browser modes: every query returned at
+least one result; sanity modes: bundles well-formed and connected), 1 otherwise.
 """
 
 from __future__ import annotations
@@ -49,7 +50,6 @@ import argparse
 import contextlib
 import json
 import pathlib
-import re
 import sys
 import threading
 import urllib.request
@@ -59,7 +59,6 @@ from typing import Any
 DEFAULT_QUERIES = ["workshops", "segmentation", "plugin", "keybindings", "layer"]
 # Terms that exist in multiple sibling sites, for proving the merge works.
 CROSS_SITE_QUERIES = ["segmentation", "plugin", "workshops"]
-RESULT_RE = re.compile(r"(\d+)\s+results?\s+for\b")
 # Canonical napari.org paths each site is deployed under — mirrors
 # napari_sphinx_theme/static/search/napari-sites.json.
 SITE_MOUNTS: dict[str, list[str]] = {
